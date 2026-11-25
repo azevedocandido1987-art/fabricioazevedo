@@ -160,7 +160,8 @@ details summary{list-style:none}details summary::-webkit-details-marker{display:
 <script>
 'use strict';
 // ================= UTIL =================
-const LS='fin2_db',LSC='fin2_cloud',COLS=['receitas','despesas','dizimos','cartoes','categorias','recorrentes'];
+const SUPA_URL='https://djfkjfwxnooxbemxwkel.supabase.co',SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRqZmtqZnd4bm9veGJlbXh3a2VsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk0NDY2NjksImV4cCI6MjA5NTAyMjY2OX0.rhKig5OqBF-PHD-mk4vRzYiP6OcWsAZLapzNYUyUqAk',LSK='fin2_chave';
+const LS='fin2_db',COLS=['receitas','despesas','dizimos','cartoes','categorias','recorrentes'];
 const CORES=['#3B82D6','#22975F','#E07A3F','#8B5CF6','#D64545','#14A3B8','#C98204','#E05297','#6366F1','#0EA5A4','#B08422','#64748B'];
 const MESES=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 const SEM=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
@@ -215,7 +216,7 @@ function carregar(){
 function gravar(){try{localStorage.setItem(LS,JSON.stringify(db))}catch(e){toast('⚠️ Sem espaço no navegador')}}
 function salvar(col,o){o.updated_at=now();const a=db[col],i=a.findIndex(x=>x.id===o.id);i>=0?a[i]=o:a.push(o);db._fila[col+':'+o.id]=Date.now()+Math.random()}
 function remover(col,id){db[col]=db[col].filter(x=>x.id!==id);db._fila[col+':'+id]='del'+Date.now()}
-function marcarTudo(){COLS.forEach(c=>db[c].forEach(x=>db._fila[c+':'+x.id]=Date.now()+Math.random()));db._fila['config:config']=Date.now()}
+function marcarTudo(){COLS.forEach(c=>db[c].forEach(x=>(x.updated_at||'').startsWith('2000')||(db._fila[c+':'+x.id]=Date.now()+Math.random())));db._fila['config:config']=Date.now()}
 function commit(msg){gravar();render();if(msg)toast(msg);agendarSync()}
 function setCfg(k,v){db.config[k]=v;db.config.updated_at=now();db._fila['config:config']=Date.now();commit('✅ Salvo')}
 
@@ -263,7 +264,7 @@ function render(){
   document.querySelectorAll('.c-dz').forEach(e=>{e.textContent=dz;e.style.display=dz?'':'none'});
   $('#view').innerHTML=V[sec]();
   $('#fab').style.display=sec==='ajustes'?'none':'';
-  $('#sideFt').innerHTML=user?'☁️ '+esc(user.email):'💾 Dados neste aparelho';
+  $('#sideFt').innerHTML=chave()?'☁️ Sincronizado na nuvem':'💾 Dados neste aparelho';
 }
 function go(s){sec=s;const v=$('#view');v.classList.remove('anim');void v.offsetWidth;v.classList.add('anim');render();scrollTo(0,0);history.replaceState(null,'','#'+s)}
 function setMes(m){mes=m;render()}
@@ -587,17 +588,14 @@ function formas(D){
 
 // ---------- AJUSTES ----------
 V.ajustes=()=>{
-  const c=cloud();let nv;
-  if(!c.url)nv=`<div class="fg"><label>Project URL</label><input id="cUrl" placeholder="https://xxxx.supabase.co"></div><div class="fg"><label>Anon key (pública)</label><input id="cKey" placeholder="eyJhbGciOi..."></div><button class="btn bp" onclick="salvarCloud()">Conectar projeto</button><p class="mut" style="font-size:12px;margin-top:.6rem">Sem nuvem, os dados ficam só neste aparelho. Rode o <b>schema.sql</b> no Supabase antes.</p>`;
-  else if(!user)nv=`<p class="mut" style="font-size:12px;margin-bottom:.6rem">Projeto: ${esc(c.url.replace('https://',''))}</p><div class="fg"><label>E-mail</label><input id="cEmail" type="email" autocomplete="username"></div><div class="fg"><label>Senha</label><input id="cSenha" type="password" autocomplete="current-password"></div><div style="display:flex;gap:.5rem;flex-wrap:wrap"><button class="btn bp" onclick="entrar(false)">Entrar</button><button class="btn bs" onclick="entrar(true)">Criar conta</button><button class="btn bs" onclick="trocarProjeto()">Trocar projeto</button></div>`;
-  else nv=`<p style="font-size:13px;margin-bottom:.4rem">Conectado como <b>${esc(user.email)}</b></p><p class="mut" style="font-size:12px;margin-bottom:.8rem">Última sincronização: ${db._sync?new Date(db._sync).toLocaleString('pt-BR'):'—'}</p><div style="display:flex;gap:.5rem;flex-wrap:wrap"><button class="btn bp" onclick="sincronizar(true)">🔄 Sincronizar agora</button><button class="btn bs" onclick="sair()">Sair</button></div>`;
+  const nv=chave()?`<p style="font-size:13px;margin-bottom:.4rem">✅ Este aparelho está conectado à nuvem.</p><p class="mut" style="font-size:12px;margin-bottom:.8rem">Última sincronização: ${db._sync?new Date(db._sync).toLocaleString('pt-BR'):'—'}</p><div style="display:flex;gap:.5rem;flex-wrap:wrap"><button class="btn bp" onclick="sincronizar(true)">🔄 Sincronizar agora</button><button class="btn bs" onclick="esquecerChave()">Desconectar aparelho</button></div>`:`<p class="mut" style="font-size:13px;margin-bottom:.8rem">Os dados estão só neste aparelho.</p><button class="btn bp" onclick="pedirChave()">🔒 Digitar código de acesso</button>`;
   const D=noMes(db.despesas,mes);
   return `<h1>Ajustes</h1><div class="sub">Personalize seu controle</div>
   <div class="g2"><div class="card"><div class="ch"><div class="ct">👤 Perfil & dízimo</div></div>
    <div class="fg"><label>Seu nome</label><input value="${esc(db.config.nome||'')}" onchange="setCfg('nome',this.value.trim())" placeholder="Como quer ser chamado"></div>
    <div class="fg"><label>Percentual do dízimo (%)</label><input inputmode="decimal" value="${vstr(db.config.dizimoPct)}" onchange="setCfg('dizimoPct',parseValor(this.value))"><small class="mut">Vale para as novas receitas. As já lançadas mantêm o percentual delas, e você pode ajustar cada uma.</small></div>
    ${dpInstall?`<button class="btn bp" onclick="instalar()">📲 Instalar como aplicativo</button>`:`<small class="mut">📲 Para instalar: no celular, use o menu do navegador › "Adicionar à tela inicial".</small>`}</div>
-  <div class="card"><div class="ch"><div class="ct">☁️ Nuvem · Supabase</div><span class="pill ${user?'p-ok':c.url?'p-pe':'p-bl'}">${user?'Conectado':c.url?'Faça login':'Só neste aparelho'}</span></div>${nv}</div></div>
+  <div class="card"><div class="ch"><div class="ct">☁️ Nuvem · Supabase</div><span class="pill ${chave()?'p-ok':'p-bl'}">${chave()?'Conectado':'Só neste aparelho'}</span></div>${nv}</div></div>
   <div class="card"><div class="ch"><div class="ct">🏷️ Categorias & orçamentos</div><button class="btn bp sm" onclick="abrirCat()">+ Nova</button></div>
    <div class="mut" style="font-size:12px;margin:-.3rem 0 .5rem .45rem">Defina um orçamento mensal e acompanhe no Início. Gastos de ${nomeMes(mes)} ao lado.</div>
    ${db.categorias.map(c=>{const g=soma(D.filter(d=>d.categoria_id===c.id));return `<div class="row cl" onclick="abrirCat('${c.id}')">${ico(c)}<div class="ri"><b>${esc(c.nome)}</b><small>${{receita:'Receita',despesa:'Despesa',ambos:'Receita e despesa'}[c.tipo]}${c.orcamento?' · orçamento '+fmt(c.orcamento):''}</small></div>${c.tipo!=='receita'&&g?`<div class="rv" style="font-size:12.5px;font-weight:500">${fmt(g)}</div>`:''}</div>`}).join('')}</div>
@@ -651,28 +649,34 @@ function csv(){
   baixar(txt,'financas-'+hoje()+'.csv','text/csv;charset=utf-8');toast('📄 CSV exportado');
 }
 
-// ================= NUVEM (Supabase) =================
-let sb=null,user=null,syncT=null,syncing=false,syncSt='local';
-function cloud(){try{return JSON.parse(localStorage.getItem(LSC)||'{}')}catch(e){return{}}}
-function setSync(s){syncSt=s;const m={local:['💾','Local'],login:['🔑','Entrar'],sync:['🔄','Sincronizando'],ok:['☁️','Sincronizado'],erro:['⚠️','Offline']}[s];$('#syncBadge').innerHTML=m[0]+' <span class="t">'+m[1]+'</span>';$('#syncBadge').title=s==='erro'?'Sem conexão com a nuvem. Os dados estão salvos no aparelho.':''}
+// ================= NUVEM (Supabase · código de acesso) =================
+let sb=null,syncT=null,syncing=false,syncSt='local';
+const chave=()=>localStorage.getItem(LSK)||'';
+function setSync(s){syncSt=s;const m={local:['💾','Local'],lock:['🔒','Código'],sync:['🔄','Sincronizando'],ok:['☁️','Sincronizado'],erro:['⚠️','Offline']}[s];$('#syncBadge').innerHTML=m[0]+' <span class="t">'+m[1]+'</span>';$('#syncBadge').title=s==='erro'?'Sem conexão com a nuvem. Os dados estão salvos no aparelho.':''}
 function loadLib(){return window.supabase?Promise.resolve():new Promise((ok,er)=>{const s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';s.onload=ok;s.onerror=er;document.head.appendChild(s)})}
-async function initCloud(){
-  const c=cloud();if(!c.url||!c.key){setSync('local');return}
-  try{await loadLib();sb=supabase.createClient(c.url,c.key);const{data}=await sb.auth.getSession();user=data.session?.user||null;
-    sb.auth.onAuthStateChange((ev,s)=>{const nu=s?.user||null;if(ev==='SIGNED_IN'&&!db._sync)marcarTudo();user=nu;if(user)setTimeout(()=>sincronizar(),0);else setSync('login');render()});
-    user?sincronizar():setSync('login');render();
-  }catch(e){setSync('erro')}
+const cliente=c=>supabase.createClient(SUPA_URL,SUPA_KEY,{auth:{persistSession:false,autoRefreshToken:false},global:{headers:{'x-chave':c}}});
+async function initCloud(){if(!chave()){setSync('lock');pedirChave();return}try{await loadLib();sb=cliente(chave());sincronizar()}catch(e){setSync('erro')}}
+function pedirChave(){
+  $('#sheet').innerHTML=`<div class="sh-h"><h2>🔒 Código de acesso</h2><button class="x" onclick="fecharModal()">✕</button></div><p class="mut" style="font-size:13px;margin-bottom:1rem">Digite seu código. Ele é pedido só uma vez neste aparelho.</p><div class="fg"><input id="kCod" type="password" autocomplete="current-password" placeholder="Seu código" onkeydown="if(event.key==='Enter')validarChave()"></div><button class="btn bp" style="width:100%;padding:.8rem" onclick="validarChave()">Entrar</button>`;
+  abrirModal();setTimeout(()=>{const e=$('#kCod');if(e)e.focus()},120);
 }
-function agendarSync(){if(!sb||!user)return;clearTimeout(syncT);syncT=setTimeout(sincronizar,1200)}
+async function validarChave(){
+  const c=$('#kCod').value.trim();if(!c)return;
+  try{await loadLib();const t=cliente(c),{data,error}=await t.rpc('fin_check');if(error)throw error;if(!data)return toast('⚠️ Código incorreto');
+    localStorage.setItem(LSK,c);if(!db._sync&&COLS.some(k=>k!=='categorias'&&db[k].length))marcarTudo();sb=t;fecharModal();toast('✅ Conectado!');sincronizar(true);
+  }catch(e){toast('⚠️ '+(e.message||'Sem conexão'))}
+}
+function esquecerChave(){if(!confirm('Desconectar este aparelho da nuvem? Os dados continuam aqui.'))return;localStorage.removeItem(LSK);sb=null;db._sync='';gravar();setSync('lock');render()}
+function agendarSync(){if(!sb)return;clearTimeout(syncT);syncT=setTimeout(sincronizar,1200)}
 async function sincronizar(manual){
-  if(!sb||!user){if(manual){toast(cloud().url?'🔑 Faça login em Ajustes':'☁️ Configure a nuvem em Ajustes');go('ajustes')}return}
+  if(!sb){if(manual)chave()?initCloud():pedirChave();return}
   if(syncing)return;syncing=true;setSync('sync');
   try{
     const snap={...db._fila},keys=Object.keys(snap);
     if(keys.length){
       const rows=keys.map(k=>{const i=k.indexOf(':'),col=k.slice(0,i),id=k.slice(i+1),o=col==='config'?db.config:(db[col]||[]).find(x=>x.id===id),del=String(snap[k]).startsWith('del')||!o;
-        return{user_id:user.id,id:k,tipo:col,dados:del?{}:o,deleted:del,updated_at:(o&&o.updated_at)||now()}});
-      for(let i=0;i<rows.length;i+=500){const{error}=await sb.from('fin_registros').upsert(rows.slice(i,i+500),{onConflict:'user_id,id'});if(error)throw error}
+        return{id:k,tipo:col,dados:del?{}:o,deleted:del,updated_at:(o&&o.updated_at)||now()}});
+      for(let i=0;i<rows.length;i+=500){const{error}=await sb.from('fin_registros').upsert(rows.slice(i,i+500),{onConflict:'id'});if(error)throw error}
       keys.forEach(k=>{if(db._fila[k]===snap[k])delete db._fila[k]});
     }
     let all=[],from=0;for(;;){const{data,error}=await sb.from('fin_registros').select('id,tipo,dados,deleted').range(from,from+999);if(error)throw error;all=all.concat(data);if(data.length<1000)break;from+=1000}
@@ -683,18 +687,11 @@ async function sincronizar(manual){
       if(r.deleted){if(i>=0){a.splice(i,1);mud=true}return}
       if(i<0){a.push(r.dados);mud=true}else if((r.dados.updated_at||'')>(a[i].updated_at||'')){a[i]=r.dados;mud=true}});
     db._sync=now();gravar();if(mud||manual)render();setSync('ok');if(manual)toast('☁️ Sincronizado');
-  }catch(e){console.error(e);setSync('erro');if(manual)toast('⚠️ '+(e.message||'Falha ao sincronizar'))}
+  }catch(e){console.error(e);
+    if(e.code==='42501'){localStorage.removeItem(LSK);sb=null;setSync('lock');toast('🔒 Código inválido. Digite novamente.');pedirChave()}
+    else{setSync('erro');if(manual)toast('⚠️ '+(e.message||'Falha ao sincronizar'))}}
   syncing=false;if(Object.keys(db._fila).length&&syncSt==='ok')agendarSync();
 }
-function salvarCloud(){const url=$('#cUrl').value.trim().replace(/\/+$/,''),key=$('#cKey').value.trim();if(!/^https:\/\/[\w-]+\.supabase\.co$/.test(url)||key.length<30)return toast('⚠️ URL ou chave inválida');localStorage.setItem(LSC,JSON.stringify({url,key}));initCloud().then(()=>{render();toast('✅ Projeto conectado. Agora faça login.')})}
-function trocarProjeto(){if(!confirm('Desconectar deste projeto?'))return;try{sb&&sb.auth.signOut()}catch(e){}localStorage.removeItem(LSC);sb=null;user=null;db._sync='';gravar();setSync('local');render()}
-const traduz=m=>({'Invalid login credentials':'E-mail ou senha incorretos','User already registered':'E-mail já cadastrado','Email not confirmed':'Confirme seu e-mail primeiro'}[m]||m);
-async function entrar(novo){
-  const e=$('#cEmail').value.trim(),s=$('#cSenha').value;if(!e||s.length<6)return toast('⚠️ Informe e-mail e senha (mín. 6 caracteres)');
-  const{data,error}=novo?await sb.auth.signUp({email:e,password:s}):await sb.auth.signInWithPassword({email:e,password:s});
-  if(error)return toast('⚠️ '+traduz(error.message));if(novo&&!data.session)return toast('📧 Conta criada. Confirme o e-mail e depois entre.');toast('✅ Conectado!');
-}
-async function sair(){if(!confirm('Sair da conta? Os dados continuam neste aparelho.'))return;await sb.auth.signOut();user=null;db._sync='';gravar();setSync('login');render()}
 
 // ================= INIT =================
 document.addEventListener('mouseover',e=>{const t=e.target.closest&&e.target.closest('[data-tip]'),tp=$('#tip');if(t){tp.innerHTML=t.dataset.tip;tp.classList.add('on')}else tp.classList.remove('on')});
